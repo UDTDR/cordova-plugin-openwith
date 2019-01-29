@@ -101,12 +101,29 @@ class Serializer {
         }
 
         String type = intent.getType();
+        if (type == null) {
+            return null;
+        }
+
+        String action = intent.getAction();
+        if (Intent.ACTION_SEND_MULTIPLE.equals(action)) {
+            JSONArray items = new JSONArray();
+            ArrayList<Uri> uris = intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
+            if (uris != null) {
+                for (int i = 0; i < uris.length; i++) {
+                    final JSONObject item = Serializer.buildJSONItem(contentResolver, uris[i], null);
+                    if (item != null) {
+                        items.put(item);
+                    }
+                }
+            }
+            return items;
+        }
         if ("text/plain".equals(type)) {
             String text = intent.getStringExtra(Intent.EXTRA_TEXT);
             if (text != null) {
                 final JSONObject item = Serializer.buildJSONItem(contentResolver, null, text);
                 if (item != null) {
-                    JSONArray items = new JSONArray();
                     items.put(item);
                     return items;
                 }
