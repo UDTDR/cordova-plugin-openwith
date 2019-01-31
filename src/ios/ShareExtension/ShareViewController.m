@@ -3,7 +3,7 @@
 #import "ShareViewController.h"
 #import <MobileCoreServices/MobileCoreServices.h>
 
-@interface ShareViewController : SLComposeServiceViewController <UIAlertViewDelegate> {
+@interface ShareViewController : UIViewController {
     int _verbosityLevel;
     NSUserDefaults *_userDefaults;
     NSString *_backURL;
@@ -56,12 +56,12 @@
 }
 
 - (void) viewDidLoad {
+    [self setup];
     [self debug:@"[viewDidLoad]"];
 }
 
 - (void) viewDidAppear:(BOOL)animated {
     [self.view endEditing:YES];
-    [self setup];
     [self loadAttachments];
     [self debug:@"[viewDidAppear]"];
 }
@@ -71,22 +71,22 @@
 }
 
 - (void) openURL:(nonnull NSURL *)url {
-    
+
     SEL selector = NSSelectorFromString(@"openURL:options:completionHandler:");
-    
+
     UIResponder* responder = self;
     while ((responder = [responder nextResponder]) != nil) {
         NSLog(@"responder = %@", responder);
         if([responder respondsToSelector:selector] == true) {
             NSMethodSignature *methodSignature = [responder methodSignatureForSelector:selector];
             NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:methodSignature];
-            
+
             // Arguments
             NSDictionary<NSString *, id> *options = [NSDictionary dictionary];
             void (^completion)(BOOL success) = ^void(BOOL success) {
                 NSLog(@"Completions block: %i", success);
             };
-            
+
             [invocation setTarget: responder];
             [invocation setSelector: selector];
             [invocation setArgument: &url atIndex: 2];
@@ -105,52 +105,54 @@
     // Emit a URL that opens the cordova app
     NSString *url = [NSString stringWithFormat:@"%@://shared", SHAREEXT_URL_SCHEME];
 
-    [self openURL:[NSURL URLWithString:url]];
     // Shut down the extension
     [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
+
+    [self openURL:[NSURL URLWithString:url]];
 }
 
 - (void) loadAttachments {
     __block NSMutableArray *items = [[NSMutableArray alloc] init];
     __block NSDictionary *results = @{
+                                      @"text": @"Example Text",
                                       @"backURL": self.backURL != nil ? self.backURL : @"",
                                       @"items": items,
                                       };
 
     NSExtensionItem *extensionItem = self.extensionContext.inputItems.firstObject;
     __block int remainingAttachments = extensionItem.attachments.count;
-    
+
     NSString *urlUTI = (NSString*)kUTTypeURL;
     NSString *fileURLUTI = (NSString*)kUTTypeFileURL;
     NSString *plainTextUTI = (NSString*)kUTTypePlainText;
     NSString *dataUTI = (NSString*)kUTTypeData;
-    
+
     for (NSItemProvider* itemProvider in extensionItem.attachments) {
         [self debug:[NSString stringWithFormat:@"item provider registered indentifiers = %@", itemProvider.registeredTypeIdentifiers]];
-        
+
         // If the itme
         BOOL confromsToFileURL = [itemProvider hasItemConformingToTypeIdentifier:fileURLUTI];
-        
+
         // Handle URLs but ignore file URLs
         if (confromsToFileURL == false && [itemProvider hasItemConformingToTypeIdentifier:urlUTI]) {
             [self debug:[NSString stringWithFormat:@"loading item as \"%@\"", urlUTI]];
             [itemProvider loadItemForTypeIdentifier:urlUTI options:nil completionHandler:^(NSURL* url, NSError* error) {
                 --remainingAttachments;
-                
+
                 NSString *uti = urlUTI;
                 if (itemProvider.registeredTypeIdentifiers.count > 0) {
                     uti = itemProvider.registeredTypeIdentifiers.firstObject;
                 }
-                
+
                 NSDictionary *dict = @{
                                        @"text" : url.absoluteString,
                                        @"uti": uti,
                                        @"utis": itemProvider.registeredTypeIdentifiers,
                                        @"type": [self mimeTypeFromUti:uti],
                                        };
-                
+
                 [self debug:[NSString stringWithFormat:@"loaded item as \"%@\" = %@", urlUTI, dict]];
-                
+
                 [items addObject:dict];
                 if (remainingAttachments == 0) {
                     [self sendResults:results];
@@ -162,21 +164,21 @@
             [self debug:[NSString stringWithFormat:@"loading item as \"%@\"", plainTextUTI]];
             [itemProvider loadItemForTypeIdentifier:plainTextUTI options:nil completionHandler:^(NSString* text, NSError* error) {
                 --remainingAttachments;
-                
+
                 NSString *uti = plainTextUTI;
                 if (itemProvider.registeredTypeIdentifiers.count > 0) {
                     uti = itemProvider.registeredTypeIdentifiers.firstObject;
                 }
-                
+
                 NSDictionary *dict = @{
                                        @"text" : text,
                                        @"uti": uti,
                                        @"utis": itemProvider.registeredTypeIdentifiers,
                                        @"type": [self mimeTypeFromUti:uti],
                                        };
-                
+
                 [self debug:[NSString stringWithFormat:@"loaded item as \"%@\" = %@", plainTextUTI, dict]];
-                
+
                 [items addObject:dict];
                 if (remainingAttachments == 0) {
                     [self sendResults:results];
@@ -188,19 +190,19 @@
             [self debug:[NSString stringWithFormat:@"loading file in place as \"%@\"", dataUTI]];
             [itemProvider loadInPlaceFileRepresentationForTypeIdentifier:dataUTI completionHandler:^(NSURL* fileUrl, BOOL isInPlace, NSError* error) {
                 --remainingAttachments;
-                
+
                 NSString *uti = dataUTI;
                 if (itemProvider.registeredTypeIdentifiers.count > 0) {
                     uti = itemProvider.registeredTypeIdentifiers.firstObject;
                 }
-                
+
                 NSString *fileName = @"";
                 if ([itemProvider respondsToSelector:NSSelectorFromString(@"getSuggestedName")]) {
                     fileName = [itemProvider valueForKey:@"suggestedName"];
                 } else if (isInPlace) {
                     fileName = fileUrl.lastPathComponent;
                 }
-                
+
                 NSDictionary *dict = @{
                                        @"uri" : fileUrl.absoluteString,
                                        @"uti": uti,
@@ -208,9 +210,9 @@
                                        @"type": [self mimeTypeFromUti:uti],
                                        @"name": fileName,
                                        };
-                
+
                 [self debug:[NSString stringWithFormat:@"loaded file in place as \"%@\" = %@", dataUTI, dict]];
-                
+
                 [items addObject:dict];
                 if (remainingAttachments == 0) {
                     [self sendResults:results];
