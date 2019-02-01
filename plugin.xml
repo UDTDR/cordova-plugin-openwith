@@ -42,6 +42,7 @@
 
     <platform name="ios">
         <preference name="IOS_URL_SCHEME"/>
+        <preferences name="IOS_UNIFORM_TYPE_IDENTIFIER" default="public.data"/>
 
         <config-file target="config.xml" parent="/*">
             <feature name="OpenWithPlugin">
@@ -54,7 +55,7 @@
             <array>
                 <dict>
                     <key>CFBundleURLName</key>
-                    <string>$(CFBundleIdentifier).shareextension</string>
+                    <string>cordova.plugin.openwith.$IOS_URL_SCHEME.shareextension</string>
                     <key>CFBundleURLSchemes</key>
                     <array>
                         <string>$IOS_URL_SCHEME</string>
@@ -63,24 +64,9 @@
             </array>
         </config-file>
 
-        <!-- Entitlements (Debug) -->
-        <config-file target="*-Debug.plist" parent="com.apple.security.application-groups">
-          <array>
-            <string>group.$(CFBundleIdentifier).shareextension</string>
-          </array>
-        </config-file>
-
-        <!-- Entitlements (Release) -->
-        <config-file target="*-Release.plist" parent="com.apple.security.application-groups">
-          <array>
-            <string>group.$(CFBundleIdentifier).shareextension</string>
-          </array>
-        </config-file>
-
         <source-file src="src/ios/OpenWithPlugin.m"/>
 
         <!-- Cordova hooks -->
-        <hook type="before_plugin_install" src="hooks/npmInstall.js"/>
         <hook type="before_plugin_install" src="hooks/iosCopyShareExtension.js"/>
         <hook type="after_plugin_install" src="hooks/iosAddTarget.js"/>
         <hook type="before_plugin_uninstall" src="hooks/iosRemoveTarget.js"/>

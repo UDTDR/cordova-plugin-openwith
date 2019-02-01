@@ -38,7 +38,7 @@
                         extensionItems, $extensionItem,
                         SUBQUERY(
                             $extensionItem.attachments, $attachment,
-                            ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.data"
+                            ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "__UNIFORM_TYPE_IDENTIFIER__"
                         ).@count &gt;= 1
                     ).@count &gt;= 1
                 </string>
