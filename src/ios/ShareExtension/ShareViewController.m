@@ -203,17 +203,31 @@
                     fileName = fileUrl.lastPathComponent;
                 }
 
-                NSDictionary *dict = @{
-                                       @"uri" : fileUrl.absoluteString,
-                                       @"uti": uti,
-                                       @"utis": itemProvider.registeredTypeIdentifiers,
-                                       @"type": [self mimeTypeFromUti:uti],
-                                       @"name": fileName,
-                                       };
+                // Copy the file to the shared cache folder so the cordova app has access to it.
+                NSURL *containerUrl = [ [ NSFileManager defaultManager] containerURLForSecurityApplicationGroupIdentifier: SHAREEXT_GROUP_IDENTIFIER ];
+                NSURL *sharedCacheUrl = [containerUrl URLByAppendingPathComponent: @"Library/Caches"];
 
-                [self debug:[NSString stringWithFormat:@"loaded file in place as \"%@\" = %@", dataUTI, dict]];
+                // Create a unique shared filename to avoid overwriting
+                NSString *sharedFileName = [[[NSUUID UUID] UUIDString] stringByAppendingPathExtension:fileUrl.lastPathComponent];
+                NSURL *sharedFileUrl = [sharedCacheUrl URLByAppendingPathComponent: sharedFileName];
+                Boolean copiedSharedFile = [[NSFileManager defaultManager] copyItemAtURL:fileUrl toURL:sharedFileUrl error:nil];
 
-                [items addObject:dict];
+                if (copiedSharedFile) {
+                    NSDictionary *dict = @{
+                                           @"uri" : sharedFileUrl.absoluteString,
+                                           @"uti": uti,
+                                           @"utis": itemProvider.registeredTypeIdentifiers,
+                                           @"type": [self mimeTypeFromUti:uti],
+                                           @"name": fileName,
+                                           };
+
+                    [self debug:[NSString stringWithFormat:@"loaded file in place as \"%@\" = %@", dataUTI, dict]];
+
+                    [items addObject:dict];
+                } else {
+                    [self debug:[NSString stringWithFormat:@"failed to copy file \"%@\" to \"%@\"", fileUrl, sharedFileUrl]];
+                }
+
                 if (remainingAttachments == 0) {
                     [self sendResults:results];
                 }
