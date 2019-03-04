@@ -5,8 +5,8 @@
     <license>MIT</license>
 
     <engines>
-        <engine name="cordova" version=">=7.1.0"/>
-        <engine name="cordova-android" version=">=7.1.0"/>
+        <engine name="cordova" version=">="/>
+        <engine name="cordova-android" version=">=6.4.0"/>
         <engine name="cordova-ios" version=">=4.5.0"/>
     </engines>
 
@@ -21,7 +21,7 @@
             <feature name="OpenWithPlugin">
                 <param name="android-package" value="com.zenkit.cordova.openwith.OpenWithPlugin"/>
             </feature>
-            <preference name="AndroidLaunchMode" value="singleTask"/>
+            <preference name="AndroidLaunch7.1.0Mode" value="singleTask"/>
         </config-file>
 
         <config-file target="AndroidManifest.xml" parent="/manifest/application/activity">
