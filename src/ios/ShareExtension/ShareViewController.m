@@ -94,6 +94,28 @@
             [invocation setArgument: &completion atIndex: 4];
             [invocation invoke];
             break;
+            if (@available(iOS 13.0, *)) {
+                UISceneOpenExternalURLOptions * options = [[UISceneOpenExternalURLOptions alloc] init];
+                options.universalLinksOnly = false;
+
+                [invocation setTarget: responder];
+                [invocation setSelector: selector];
+                [invocation setArgument: &url atIndex: 2];
+                [invocation setArgument: &options atIndex:3];
+                [invocation setArgument: &completion atIndex: 4];
+                [invocation invoke];
+                break;
+            } else {
+                NSDictionary<NSString *, id> *options = [NSDictionary dictionary];
+
+                [invocation setTarget: responder];
+                [invocation setSelector: selector];
+                [invocation setArgument: &url atIndex: 2];
+                [invocation setArgument: &options atIndex:3];
+                [invocation setArgument: &completion atIndex: 4];
+                [invocation invoke];
+                break;
+            }
         }
     }
 }
@@ -149,6 +171,7 @@
                                        @"uti": uti,
                                        @"utis": itemProvider.registeredTypeIdentifiers,
                                        @"type": [self mimeTypeFromUti:uti],
+                                       @"data" : @'alles mist',
                                        };
 
                 [self debug:[NSString stringWithFormat:@"loaded item as \"%@\" = %@", urlUTI, dict]];
@@ -175,6 +198,7 @@
                                        @"uti": uti,
                                        @"utis": itemProvider.registeredTypeIdentifiers,
                                        @"type": [self mimeTypeFromUti:uti],
+                                       @"data" : @'alles mist2',
                                        };
 
                 [self debug:[NSString stringWithFormat:@"loaded item as \"%@\" = %@", plainTextUTI, dict]];
@@ -207,18 +231,39 @@
                 NSURL *containerUrl = [ [ NSFileManager defaultManager] containerURLForSecurityApplicationGroupIdentifier: SHAREEXT_GROUP_IDENTIFIER ];
                 NSURL *sharedCacheUrl = [containerUrl URLByAppendingPathComponent: @"Library/Caches"];
 
+                // FileInfo
+                NSString *path = fileUrl.absoluteString;
+                NSString *lastPath = [path lastPathComponent];
+                NSString *fileExtension = [lastPath pathExtension];
+                
                 // Create a unique shared filename to avoid overwriting
-                NSString *sharedFileName = [[[NSUUID UUID] UUIDString] stringByAppendingPathExtension:fileUrl.lastPathComponent];
+                //NSString *sharedFileName = [[[NSUUID UUID] UUIDString] stringByAppendingPathExtension:fileUrl.lastPathComponent];
+                NSString *sharedFileName = [[[NSUUID UUID] UUIDString] stringByAppendingPathExtension:fileExtension];
                 NSURL *sharedFileUrl = [sharedCacheUrl URLByAppendingPathComponent: sharedFileName];
                 Boolean copiedSharedFile = [[NSFileManager defaultManager] copyItemAtURL:fileUrl toURL:sharedFileUrl error:nil];
 
+                
+                /*NSData *data = [[NSData alloc] init];
+                if([(NSObject*)item isKindOfClass:[NSURL class]]) {
+                    data = [NSData dataWithContentsOfURL:(NSURL*)item];
+                }
+                if([(NSObject*)item isKindOfClass:[UIImage class]]) {
+                    data = UIImagePNGRepresentation((UIImage*)item);
+                }*/
+                
+                // Tommy Drzewosz: Save PDF as Image
                 if (copiedSharedFile) {
+                    
+                    NSLog(@"copiedSharedFile %@", sharedFileUrl.absoluteString);
+
                     NSDictionary *dict = @{
                                            @"uri" : sharedFileUrl.absoluteString,
                                            @"uti": uti,
                                            @"utis": itemProvider.registeredTypeIdentifiers,
                                            @"type": [self mimeTypeFromUti:uti],
                                            @"name": fileName,
+                                           @"data" : @'ABCD',
+                                           @"originalFilename" : fileUrl.lastPathComponent
                                            };
 
                     [self debug:[NSString stringWithFormat:@"loaded file in place as \"%@\" = %@", dataUTI, dict]];
@@ -302,6 +347,44 @@
     CFStringRef cret = UTTypeCopyPreferredTagWithClass((__bridge CFStringRef)uti, kUTTagClassMIMEType);
     NSString *ret = (__bridge_transfer NSString *)cret;
     return ret == nil ? @"" : ret;
+}
+
+// Tommy Drzewosz
+-(void)splitPDF:(NSURL *)sourcePDFUrl withOutputName:(NSString *)outputBaseName intoDirectory:(NSString *)directory
+{
+    CGPDFDocumentRef SourcePDFDocument = CGPDFDocumentCreateWithURL((__bridge CFURLRef)sourcePDFUrl);
+    size_t numberOfPages = CGPDFDocumentGetNumberOfPages(SourcePDFDocument);
+    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+    NSString *documentsDirectory = [paths objectAtIndex:0];
+    NSString *filePathAndDirectory = [documentsDirectory stringByAppendingPathComponent:directory];
+    NSError *error;
+    if (![[NSFileManager defaultManager] createDirectoryAtPath:filePathAndDirectory
+                                   withIntermediateDirectories:NO
+                                                    attributes:nil
+                                                         error:&error])
+    {
+        NSLog(@"Create directory error: %@", error);
+        return;
+    }
+    for(int currentPage = 1; currentPage <= numberOfPages; currentPage ++ )
+    {
+        CGPDFPageRef SourcePDFPage = CGPDFDocumentGetPage(SourcePDFDocument, currentPage);
+        // CoreGraphics: MUST retain the Page-Refernce manually
+        CGPDFPageRetain(SourcePDFPage);
+        NSString *relativeOutputFilePath = [NSString stringWithFormat:@"%@/%@%d.png", directory, outputBaseName, currentPage];
+        NSString *ImageFileName = [documentsDirectory stringByAppendingPathComponent:relativeOutputFilePath];
+        CGRect sourceRect = CGPDFPageGetBoxRect(SourcePDFPage, kCGPDFMediaBox);
+        UIGraphicsBeginPDFContextToFile(ImageFileName, sourceRect, nil);
+        UIGraphicsBeginImageContext(CGSizeMake(sourceRect.size.width,sourceRect.size.height));
+        CGContextRef currentContext = UIGraphicsGetCurrentContext();
+        CGContextTranslateCTM(currentContext, 0.0, sourceRect.size.height); //596,842 //640×960,
+        CGContextScaleCTM(currentContext, 1.0, -1.0);
+        CGContextDrawPDFPage (currentContext, SourcePDFPage); // draws the page in the graphics context
+        UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+        UIGraphicsEndImageContext();
+        NSString *imagePath = [documentsDirectory stringByAppendingPathComponent: relativeOutputFilePath];
+        [UIImagePNGRepresentation(image) writeToFile: imagePath atomically:YES];
+    }
 }
 
 @end
